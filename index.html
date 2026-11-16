@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Number Merge 2048</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    body {
+      background: #1e1e2c; color: #fff;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; height: 100vh; padding: 16px; touch-action: none;
+    }
+    .header { width: 100%; max-width: 340px; display: flex; justify-content: space-between; align-items: center; }
+    .scores { display: flex; gap: 10px; }
+    .score-card {
+      background: #2b2b40; padding: 8px 14px; border-radius: 8px; text-align: center;
+    }
+    .score-label { font-size: 11px; color: #aaa; text-transform: uppercase; }
+    .score-val { font-size: 18px; font-weight: bold; }
+    .controls { display: flex; gap: 8px; }
+    button {
+      background: #4a6fa5; border: none; color: #fff; font-weight: bold;
+      padding: 10px 14px; border-radius: 8px; font-size: 14px; cursor: pointer;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #board {
+      width: 340px; height: 340px; background: #161622; border-radius: 12px;
+      padding: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    .tile {
+      background: #2b2b40; border-radius: 8px; display: flex;
+      align-items: center; justify-content: center; font-size: 26px; font-weight: bold;
+      transition: transform 0.1s ease;
+    }
+    #status { color: #ff6b6b; font-weight: bold; height: 24px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="scores">
+      <div class="score-card">
+        <div class="score-label">Score</div>
+        <div class="score-val" id="score">0</div>
+      </div>
+      <div class="score-card">
+        <div class="score-label">Best</div>
+        <div class="score-val" id="best">0</div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="undoBtn" onclick="undoMove()" disabled>Undo</button>
+      <button onclick="initGame()">New</button>
+    </div>
+  </div>
+
+  <div id="board"></div>
+  <div id="status">Swipe anywhere to merge numbers!</div>
+
+  <script>
+    let grid, prevGrid, score = 0, prevScore = 0;
+    let bestScore = Number(localStorage.getItem('best2048') || 0);
+    const colors = {
+      0: '#2b2b40', 2: '#3e4c5e', 4: '#4a6fa5', 8: '#e07a5f',
+      16: '#d95d39', 32: '#f2cc8f', 64: '#e63946', 128: '#81b29a',
+      256: '#3d5a80', 512: '#9b5de5', 1024: '#f15bb5', 2048: '#fee440'
+    };
+
+    function initGame() {
+      grid = Array.from({ length: 4 }, () => Array(4).fill(0));
+      prevGrid = null; score = 0; prevScore = 0;
+      document.getElementById('status').innerText = '';
+      document.getElementById('undoBtn').disabled = true;
+      spawn(); spawn(); render();
+    }
+
+    function spawn() {
+      let empty = [];
+      for (let r = 0; r < 4; r++)
+        for (let c = 0; c < 4; c++)
+          if (grid[r][c] === 0) empty.push([r, c]);
+      if (!empty.length) return;
+      let [r, c] = empty[Math.floor(Math.random() * empty.length)];
+      grid[r][c] = Math.random() < 0.1 ? 4 : 2;
+    }
+
+    function slide(row) {
+      let arr = row.filter(v => v);
+      for (let i = 0; i < arr.length - 1; i++) {
+        if (arr[i] === arr[i + 1]) {
+          arr[i] *= 2; score += arr[i]; arr.splice(i + 1, 1);
+        }
+      }
+      while (arr.length < 4) arr.push(0);
+      return arr;
+    }
+
+    function move(dir) {
+      let backup = grid.map(r => [...r]), bScore = score, moved = false;
+      for (let i = 0; i < 4; i++) {
+        let line = (dir === 'L' || dir === 'R') ? [...grid[i]] : [grid[i], grid[i], grid[i], grid[i]];
+        if (dir === 'R' || dir === 'D') line.reverse();
+        let merged = slide(line);
+        if (dir === 'R' || dir === 'D') merged.reverse();
+        for (let j = 0; j < 4; j++) {
+          if (dir === 'L' || dir === 'R') {
+            if (grid[i][j] !== merged[j]) moved = true;
+            grid[i][j] = merged[j];
+          } else {
+            if (grid[j][i] !== merged[j]) moved = true;
+            grid[j][i] = merged[j];
+          }
+        }
+      }
+      if (moved) {
+        prevGrid = backup; prevScore = bScore;
+        document.getElementById('undoBtn').disabled = false;
+        if (score > bestScore) {
+          bestScore = score;
+          localStorage.setItem('best2048', bestScore);
+        }
+        spawn(); render();
+        if (isGameOver()) document.getElementById('status').innerText = 'Game Over! Tap Undo or New.';
+      }
+    }
+
+    function isGameOver() {
+      for (let r = 0; r < 4; r++)
+        for (let c = 0; c < 4; c++) {
+          if (grid[r][c] === 0) return false;
+          if (c < 3 && grid[r][c] === grid[r][c + 1]) return false;
+          if (r < 3 && grid[r][c] === grid[r + 1][c]) return false;
+        }
+      return true;
+    }
+
+    function undoMove() {
+      if (!prevGrid) return;
+      grid = prevGrid.map(r => [...r]); score = prevScore; prevGrid = null;
+      document.getElementById('undoBtn').disabled = true;
+      document.getElementById('status').innerText = '';
+      render();
+    }
+
+    function render() {
+      const board = document.getElementById('board');
+      board.innerHTML = '';
+      document.getElementById('score').innerText = score;
+      document.getElementById('best').innerText = bestScore;
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          let val = grid[r][c];
+          let div = document.createElement('div');
+          div.className = 'tile';
+          div.style.background = colors[val] || '#6a4c93';
+          div.style.color = (val === 32 || val === 2048) ? '#111' : '#fff';
+          div.innerText = val || '';
+          board.appendChild(div);
+        }
+      }
+    }
+
+    let startX, startY;
+    document.addEventListener('touchstart', e => { startX = e.touches.clientX; startY = e.touches.clientY; });
+    document.addEventListener('touchend', e => {
+      let dx = e.changedTouches.clientX - startX, dy = e.changedTouches.clientY - startY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) move(dx > 0 ? 'R' : 'L');
+      else if (Math.abs(dy) > 30) move(dy > 0 ? 'D' : 'U');
+    });
+
+    initGame();
+  </script>
+</body>
+</html>
